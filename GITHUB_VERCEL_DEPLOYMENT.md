@@ -181,7 +181,7 @@ Vercel will **auto-redeploy** when you push.
 
 ### Test 1: Sign Up Flow
 1. Visit `https://YOUR_VERCEL_DOMAIN.vercel.app`
-2. Click "Get Started"                                                           
+2. Click "Get Started"                                                        
 3. Sign up with new email
 4. Verify in Supabase `users` table ✅
 
