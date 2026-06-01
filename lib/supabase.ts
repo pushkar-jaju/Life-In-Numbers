@@ -1,23 +1,45 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+// Get env vars - may be empty during build
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-// Validate at runtime, not at build time
-if (typeof window !== 'undefined' && (!supabaseUrl || !supabaseAnonKey)) {
-  console.warn(
-    'Missing Supabase credentials. Check .env.local for NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY'
-  );
-}
+// Lazy initialization - only create clients when actually used
+let supabaseClient: any = null;
+let supabaseAdminClient: any = null;
 
-// Client-side (browser) - uses anon key with RLS
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = new Proxy(
+  {},
+  {
+    get: () => {
+      if (!supabaseClient) {
+        if (!supabaseUrl || !supabaseAnonKey) {
+          throw new Error('Missing Supabase credentials');
+        }
+        supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
+      }
+      return supabaseClient;
+    },
+  }
+) as any;
 
-// Server-side (Node.js) - uses service role key (admin privileges)
-export const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
-  auth: {
-    autoRefreshToken: false,
-    persistSession: false,
-  },
-});
+export const supabaseAdmin = new Proxy(
+  {},
+  {
+    get: () => {
+      if (!supabaseAdminClient) {
+        if (!supabaseUrl || !serviceRoleKey) {
+          throw new Error('Missing Supabase credentials');
+        }
+        supabaseAdminClient = createClient(supabaseUrl, serviceRoleKey, {
+          auth: {
+            autoRefreshToken: false,
+            persistSession: false,
+          },
+        });
+      }
+      return supabaseAdminClient;
+    },
+  }
+) as any;
