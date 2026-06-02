@@ -27,10 +27,7 @@ export async function POST(request: NextRequest) {
       payload = wh.verify(body, headerPayload) as any;
     } catch (err) {
       console.error('[Webhook] Invalid signature:', err);
-      return NextResponse.json(
-        { error: 'Invalid webhook signature' },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: 'Invalid webhook signature' }, { status: 401 });
     }
 
     const data = payload.data;
@@ -50,11 +47,10 @@ export async function POST(request: NextRequest) {
     const avatarUrl = clerkUser.image_url || '';
 
     // Upsert user to Supabase
-    const { error: userError } = await supabaseAdmin
+    const { data: userData, error: userError } = await supabaseAdmin
       .from('users')
       .upsert(
         {
-          id: userId,
           clerk_id: userId,
           email,
           first_name: firstName,
@@ -62,8 +58,12 @@ export async function POST(request: NextRequest) {
           avatar_url: avatarUrl,
           updated_at: new Date().toISOString(),
         },
-        { onConflict: 'id' }
-      );
+        {
+          onConflict: 'clerk_id',
+        }
+      )
+      .select()
+      .single();
 
     if (userError) {
       console.error('[Webhook] User sync error:', userError);
@@ -74,26 +74,26 @@ export async function POST(request: NextRequest) {
     }
 
     // Create user_settings if new user
+    const databaseUserId = userData?.id;
+
     const { data: existingSettings } = await supabaseAdmin
       .from('user_settings')
       .select('id')
-      .eq('user_id', userId)
+      .eq('user_id', databaseUserId)
       .single();
 
     if (!existingSettings) {
-      const { error: settingsError } = await supabaseAdmin
-        .from('user_settings')
-        .insert({
-          user_id: userId,
-          tracking_enabled: true,
-          dark_mode: true,
-          notifications_enabled: true,
-          keyboard_tracking: true,
-          tab_tracking: true,
-          browsing_time_tracking: true,
-          privacy_mode: false,
-          data_retention_days: 365,
-        });
+      const { error: settingsError } = await supabaseAdmin.from('user_settings').insert({
+        user_id: databaseUserId,
+        tracking_enabled: true,
+        dark_mode: true,
+        notifications_enabled: true,
+        keyboard_tracking: true,
+        tab_tracking: true,
+        browsing_time_tracking: true,
+        privacy_mode: false,
+        data_retention_days: 365,
+      });
 
       if (settingsError) {
         console.error('[Webhook] Settings creation error:', settingsError);
@@ -108,9 +108,6 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('[Webhook Error]', error);
-    return NextResponse.json(
-      { error: 'Webhook processing failed' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Webhook processing failed' }, { status: 500 });
   }
 }
